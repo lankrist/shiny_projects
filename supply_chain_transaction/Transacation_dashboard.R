@@ -14,12 +14,11 @@ library(htmlwidgets) #onRender()
 setwd("/Documents/R/shiny_projects/")
 countries <- readOGR("../map_data/countries.geojson", "OGRGeoJSON")
 
-#order = read.csv("../dataset/ARTMIS/RO_history_20170824.csv")
+#order = read.csv("<transaction data>.csv")
 comor = c("RO.", "Destination.Country", "Product.Category", "Item.Description",
           "Status", "Shipped.Quantity", "Unit.Cost", "Agreed.Delivery.Date", 
           "Actual.Delivery.Date")
-
-commodity_order=order[,comor]
+#commodity_order=order[,comor]
 commodity_order= subset(commodity_order, commodity_order$Status != "Cancelled")
 
 #Functions
@@ -92,8 +91,8 @@ commodity_order$Item.Description = as.factor(gsub("\\s*\\[[^\\)]+\\]","",
 #PALLETTE
 pal <- colorNumeric(
   palette = "YlOrRd",
-  domain = c(0, max(table(commodity_order$Destination.Country)))) #how to adjust this in a smart way?
-
+  domain = c(0, max(table(commodity_order$Destination.Country)))) 
+#how to adjust this in a smart way?
 
 #MAPPING
 
@@ -114,22 +113,24 @@ ui = dashboardPage(title = "Order Lookup",
                                 selectizeInput("product", "Select Product",
                                                choices = commodity_order$Item.Description,
                                                multiple = T)),
-                       sliderInput("late_cut", "Number of Days Late:",
-                                   min=0, max=90, value=7),
+                       sliderInput("on_time", "On time Delivery Days:",
+                                   min=-150, max=150, 
+                                   value=c(-14, 7)),
+                       checkboxGroupInput("status_filters", "Order Status:",
+                                         choices = c("Late" = "Late",
+                                                     "On time" = "On time",
+                                                     "Early" = "Early",
+                                                     "Processing" = "Processing",
+                                                     "Other" = "Other"),
+                                         selected = c("Late" = "Late",
+                                                      "On time" = "On time",
+                                                      "Early" = "Early",
+                                                      "Processing" = "Processing")),
                        sliderInput("time_range","Timeframe:",
                                    min = as.Date("2015-01-01"), 
                                    max = Sys.Date(), 
                                    value = c(as.Date("2015-01-01"),
-                                             Sys.Date())),
-                       checkboxGroupInput("status_filters", "Order Status:",
-                                         choices = c("Late" = "late_order",
-                                           "On time" = "on_time",
-                                           "Processing" = "processing",
-                                           "Other" = "other"),
-                                         selected = c("Late" = "late_order",
-                                                      "On time" = "on_time",
-                                                      "Processing" = "processing",
-                                                      "Other" = "other"))
+                                             Sys.Date()))
                      )
                    ),
                    dashboardBody(
@@ -160,16 +161,20 @@ server <- function(input, output, session) {
       temp = temp[temp$Item.Description %in% input$product,]
     }
     
-    {#Status that interests the country backstop
+    {#Status that is releveant to delivery performance
     temp$status_filter = "Other"
     temp[!is.na(temp$Agreed.Delivery.Date), "status_filter"] = "Processing"
     temp[!is.na(temp$Actual.Delivery.Date) &
            temp$status_filter == "Processing", "status_filter"] = "On time"
     temp[temp$status_filter == "On time" &
-            temp$lateDays > input$late_cut, "status_filter"] = "Late"
-    # if (!is.na(input$status_filters)){
-    #   temp = temp[temp$status_filter %in% input$status_filters,]
-    #   }
+            temp$lateDays > input$on_time[2], "status_filter"] = "Late"
+    temp[temp$status_filter == "On time" &
+           temp$lateDays < input$on_time[1], "status_filter"] = "Early"
+    
+    if (!is.null(input$status_filters)){ 
+      #UI interface for checkbox ("Late" = "Late"), input$status_filter uses value to right of "=" 
+      temp = temp[temp$status_filter %in% input$status_filters,]
+      }
     
     }
     
@@ -194,7 +199,7 @@ server <- function(input, output, session) {
     colnames(expense)= c("country","Cost.Product.Shipped")
 
     #Late
-    commodity_late=as.data.frame.matrix(t(table(comods$lateDays > input$late_cut, comods$Destination.Country)))
+    commodity_late=as.data.frame.matrix(t(table(comods$lateDays > input$on_time[2], comods$Destination.Country)))
     colnames(commodity_late)[colnames(commodity_late) == "TRUE"] = "Late"
     commodity_late$country = rownames(commodity_late)
     AvglateDays = aggregate(lateDays~Destination.Country,comods, mean)

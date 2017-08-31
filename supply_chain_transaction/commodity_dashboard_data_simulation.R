@@ -1,7 +1,7 @@
 #Data simulated for commodity tool interface
 n = 10000
 rows = 50000
-days = 90
+days = 200
 quantity = 100
 
 
@@ -18,4 +18,6 @@ data.frame(
   )
 commodity_order$Actual.Delivery.Date = commodity_order$Agreed.Delivery.Date + (round(runif(rows, -days, days)))
 
-
+tier = round(runif(rows/25, 1, n))
+commodity_order$Actual.Delivery.Date[tier] = NA
+commodity_order$Agreed.Delivery.Date[sample(tier, rows/80)] = NA
