@@ -221,9 +221,8 @@ server <- function(input, output, session) {
                       "Shipped Quantity", "RO Total Cost", "Agreed Delivery Date",
                       "Actual Delivery Date", "Late days","Status_filter")
     orders$`RO Total Cost` = print.money(orders$`RO Total Cost`)
-    orders},  #hid Late days and Status_filter in final prodcut
-    options = list(scrollX = TRUE))
-                                  #datatable width changes with window size
+    orders[, -c(10,11)]},  #hid Late days and Status_filter in final prodcut
+    options = list(scrollX = TRUE))#datatable width changes with window size
   
   output$map <- renderLeaflet({
     com = map_out()
