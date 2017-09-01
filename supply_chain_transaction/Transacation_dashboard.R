@@ -1,5 +1,7 @@
-#ARV dashboard Late Orders
+#Commodity dashboard Line Items
 #Kristine Lan
+#USAID internship project
+#updated: 20170901
 
 library(shiny)
 library(RJSONIO)
@@ -15,8 +17,12 @@ setwd("/Documents/R/shiny_projects/")
 countries <- readOGR("../map_data/countries.geojson", "OGRGeoJSON")
 
 order = read.csv("/Documents/USAID_Internship2017/dataset/ARTMIS/RO_history_20170824.csv")
+
+###########################################################################################3
+
 comor = c("RO.", "Destination.Country", "Product.Category", "Item.Description",
-          "Status", "Shipped.Quantity", "Unit.Cost", "Agreed.Delivery.Date", 
+          "Status", "Shipment.Method", "Order.Fulfilment.Method", "Order.Pickup.Country", 
+          "Shipped.Quantity", "Unit.Cost", "Agreed.Delivery.Date", "Req.Delivery.Date",
           "Order.Entry.Date","Actual.Delivery.Date")
 commodity_order=order[,comor]
 commodity_order= subset(commodity_order, commodity_order$Status != "Cancelled")
@@ -119,6 +125,11 @@ ui = dashboardPage(title = "Order Lookup",
                                 selectizeInput("product", "Select Product",
                                                choices = commodity_order$Item.Description,
                                                multiple = T)),
+                       menuItem("Shipment Mechanism", icon = icon("cubes"),
+                                selectizeInput("rdc_dd", "Select Product",
+                                               choices = commodity_order$Order.Fulfilment.Method,
+                                               multiple = T)),
+                       #should there be filter on RDC location
                        sliderInput("on_time", "On time Delivery Days:",
                                    min=-150, max=150, 
                                    value=c(-14, 7)),
@@ -162,6 +173,28 @@ server <- function(input, output, session) {
     if (!is.null(input$product)){ #filter by product, product should be affected by category
       tm_out = tm_out[tm_out$Item.Description %in% input$product,]
     }
+    
+    if (!is.null(input$rdc_dd)){ #filter by product, product should be affected by category
+      tm_out = tm_out[tm_out$Order.Fulfilment.Method %in% input$rdc_dd,]
+    }
+    
+    {#Status that is releveant to delivery performance
+      tm_out$status_filter = "Other"
+      tm_out[!is.na(tm_out$Agreed.Delivery.Date), "status_filter"] = "Processing"
+      tm_out[!is.na(tm_out$Actual.Delivery.Date) &
+               tm_out$status_filter == "Processing", "status_filter"] = "On time"
+      tm_out[tm_out$status_filter == "On time" &
+               tm_out$lateDays > input$on_time[2], "status_filter"] = "Late"
+      tm_out[tm_out$status_filter == "On time" &
+               tm_out$lateDays < input$on_time[1], "status_filter"] = "Early"
+      
+      if (!is.null(input$status_filters)){ 
+        #UI interface for checkbox ("Late" = "Late"), input$status_filter uses value to right of "=" 
+        tm_out = tm_out[tm_out$status_filter %in% input$status_filters,]
+      }
+      
+    }
+    
     return(tm_out)
   })
   
@@ -171,24 +204,6 @@ server <- function(input, output, session) {
     if (!is.null(input$country)){ #filter by country
       temp = temp[temp$Destination.Country %in% input$country,]
     }
-    
-    {#Status that is releveant to delivery performance
-    temp$status_filter = "Other"
-    temp[!is.na(temp$Agreed.Delivery.Date), "status_filter"] = "Processing"
-    temp[!is.na(temp$Actual.Delivery.Date) &
-           temp$status_filter == "Processing", "status_filter"] = "On time"
-    temp[temp$status_filter == "On time" &
-            temp$lateDays > input$on_time[2], "status_filter"] = "Late"
-    temp[temp$status_filter == "On time" &
-           temp$lateDays < input$on_time[1], "status_filter"] = "Early"
-    
-    if (!is.null(input$status_filters)){ 
-      #UI interface for checkbox ("Late" = "Late"), input$status_filter uses value to right of "=" 
-      temp = temp[temp$status_filter %in% input$status_filters,]
-      }
-    
-    }
-    
     return(temp)
   })
   
@@ -228,11 +243,12 @@ server <- function(input, output, session) {
   output$table <- renderDataTable({
     orders = tab_out()
     orders$Unit.Cost = orders$Unit.Cost*orders$Shipped.Quantity
-    colnames(orders) = c("RO#", "Country", "Category", "Product", "Status",
-                      "Shipped Quantity", "RO Total Cost", "Agreed Delivery Date",
-                      "Order Entry Date", "Actual Delivery Date", "Late days","Status_filter")
-    orders$`RO Total Cost` = print.money(orders$`RO Total Cost`)
-    orders[, -c(9,11, 12)]},  #hid Late days and Status_filter in final prodcut
+    colnames(orders) = c("RO#", "Country", "Category", "Product", "Status", "Shipping Method",
+                         "Order Mechanism", "RDC Location", "Shipped Quantity", "Line Item Total Cost", 
+                         "Agreed Delivery Date", "Request Delivery Date", "Order Entry Date", 
+                         "Actual Delivery Date", "Late days", "Status_filter")
+    orders$`Line Item Total Cost` = print.money(orders$`Line Item Total Cost`)
+    orders[,-c(6:8, 12:13, 15:16)]},  #hid Late days and Status_filter in final prodcut
     options = list(scrollX = TRUE))#datatable width changes with window size
   #[, -c(10,11)]
   
@@ -259,12 +275,11 @@ server <- function(input, output, session) {
                     color = "#888",
                     fillOpacity = 0.7,
                     bringToFront = TRUE),
-                  group = "Orders") %>%
+                  group = "Line Items Delivered Late") %>%
       addMarkers(c(10, 20), c(10,-30), 
-                 popup = "Processing orders:<br> #late<br> #to be delivered <br> #ahead of schedule", 
-                 label = "# of orders still processing not yet delivered",
-                 group = "Deliveries")%>%
-      # addMarkers(~long, ~lat, popup = ~as.character(mag), label = ~as.character(mag))%>%
+                 popup = "Processing line items:<br> #late<br> #to be delivered <br> #ahead of schedule", 
+                 label = "# of line items still processing not yet delivered",
+                 group = "Line Items In Process")%>%
       #show orders about to be delivered
       addLegend("bottomright", pal = pal, values = ~Late,
                 title = "Number of Late Shipments",
@@ -272,9 +287,9 @@ server <- function(input, output, session) {
 
       # Layers control
       addLayersControl(
-        baseGroups = c("Orders"),
-        overlayGroups = c("Deliveries"), #show upcoming deliveries
-        options = layersControlOptions(collapsed = FALSE)) %>% hideGroup("Deliveries")
+        baseGroups = c("Line Items Delivered Late"),
+        overlayGroups = c("Line Items In Process"), #show upcoming deliveries
+        options = layersControlOptions(collapsed = FALSE)) %>% hideGroup("Line Items In Process")
     # %>%
       # addControl(html="<input id=\"slide\" type=\"range\" min=\"0\" max=\"1\" step=\"0.1\" value=\"1\">",
       #            position = "bottomleft") %>%
