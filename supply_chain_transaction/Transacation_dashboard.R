@@ -261,7 +261,7 @@ server <- function(input, output, session) {
                     bringToFront = TRUE),
                   group = "Orders") %>%
       addMarkers(c(10, 20), c(10,-30), 
-                 popup = "Processing orders:<br> #late<br> #to be delivered <br> Ahead of schedule", 
+                 popup = "Processing orders:<br> #late<br> #to be delivered <br> #ahead of schedule", 
                  label = "# of orders still processing not yet delivered",
                  group = "Deliveries")%>%
       # addMarkers(~long, ~lat, popup = ~as.character(mag), label = ~as.character(mag))%>%
