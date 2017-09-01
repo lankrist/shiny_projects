@@ -87,6 +87,8 @@ commodity_order$Item.Description = as.factor(gsub("\\s*\\[[^\\)]+\\]","",
                                                   as.character(commodity_order$Item.Description)))
 #will need to be editted
 
+#Country coordinates
+coords= as.data.frame(t(sapply(countries$ADMIN, geocodeAdddress)))
 
 #MAP ATTRIBUTES
 #ICONS
@@ -95,8 +97,8 @@ commodity_order$Item.Description = as.factor(gsub("\\s*\\[[^\\)]+\\]","",
 max(table(commodity_order$Destination.Country))
 pal <- colorNumeric(
   palette = "YlOrRd",
-  domain = c(0, 300)) 
-#how to adjust this in a smart way?
+  domain = c(0, 300))
+#sensitive to filters
 
 #MAPPING
 
@@ -218,6 +220,10 @@ server <- function(input, output, session) {
     return(com)
   })
   
+  # gradient = reactive({
+  #   map = map_out()
+  #   return(colorNumeric(palette = "YlOrRd", domain = c(0, max(map$Late))))
+  # })
   
   output$table <- renderDataTable({
     orders = tab_out()
@@ -229,8 +235,11 @@ server <- function(input, output, session) {
     orders[, -c(9,11, 12)]},  #hid Late days and Status_filter in final prodcut
     options = list(scrollX = TRUE))#datatable width changes with window size
   #[, -c(10,11)]
+  
   output$map <- renderLeaflet({
     com = map_out()
+    #pal = gradient()
+    
     leaflet(com) %>% addTiles() %>%
       setView(lng = 25, lat = -2, zoom = 3) %>%
       addEasyButton(easyButton(
@@ -251,10 +260,11 @@ server <- function(input, output, session) {
                     fillOpacity = 0.7,
                     bringToFront = TRUE),
                   group = "Orders") %>%
-      # addMarkers(map, lng = NULL, lat = NULL, layerId = NULL, group = NULL,
-      #            icon = NULL, popup = NULL, popupOptions = NULL, label = NULL,
-      #            labelOptions = NULL, options = markerOptions(), clusterOptions = NULL,
-      #            clusterId = NULL, data = getMapData(map))%>%
+      addMarkers(c(10, 20), c(10,-30), 
+                 popup = "Processing orders:<br> #late<br> #to be delivered <br> Ahead of schedule", 
+                 label = "# of orders still processing not yet delivered",
+                 group = "Deliveries")%>%
+      # addMarkers(~long, ~lat, popup = ~as.character(mag), label = ~as.character(mag))%>%
       #show orders about to be delivered
       addLegend("bottomright", pal = pal, values = ~Late,
                 title = "Number of Late Shipments",
@@ -264,22 +274,23 @@ server <- function(input, output, session) {
       addLayersControl(
         baseGroups = c("Orders"),
         overlayGroups = c("Deliveries"), #show upcoming deliveries
-        options = layersControlOptions(collapsed = FALSE))%>%
-      addControl(html="<input id=\"slide\" type=\"range\" min=\"0\" max=\"1\" step=\"0.1\" value=\"1\">",
-                 position = "bottomleft") %>%
-      onRender("
-        function(el,x,data){
-          var map = this;
-          var evthandler = function(e){
-            var labels = map.layerManager._byGroup.Warehouse;
-            Object.keys(labels).forEach(function(el){
-              labels[el]._container.style.opacity = +e.target.value;
-            });
-          };
-          $('#slide').on('mousemove',L.DomEvent.stopPropagation);
-          $('#slide').on('input', evthandler);
-        }
-               ")
+        options = layersControlOptions(collapsed = FALSE)) %>% hideGroup("Deliveries")
+    # %>%
+      # addControl(html="<input id=\"slide\" type=\"range\" min=\"0\" max=\"1\" step=\"0.1\" value=\"1\">",
+      #            position = "bottomleft") %>%
+      # onRender("
+      #   function(el,x,data){
+      #     var map = this;
+      #     var evthandler = function(e){
+      #       var labels = map.layerManager._byGroup.Warehouse;
+      #       Object.keys(labels).forEach(function(el){
+      #         labels[el]._container.style.opacity = +e.target.value;
+      #       });
+      #     };
+      #     $('#slide').on('mousemove',L.DomEvent.stopPropagation);
+      #     $('#slide').on('input', evthandler);
+      #   }
+      #          ")
 
 
   })
