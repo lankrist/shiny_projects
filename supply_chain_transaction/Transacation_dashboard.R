@@ -14,11 +14,11 @@ library(htmlwidgets) #onRender()
 setwd("/Documents/R/shiny_projects/")
 countries <- readOGR("../map_data/countries.geojson", "OGRGeoJSON")
 
-#order = read.csv("<transaction data>.csv")
+order = read.csv("/Documents/USAID_Internship2017/dataset/ARTMIS/RO_history_20170824.csv")
 comor = c("RO.", "Destination.Country", "Product.Category", "Item.Description",
           "Status", "Shipped.Quantity", "Unit.Cost", "Agreed.Delivery.Date", 
-          "Actual.Delivery.Date")
-#commodity_order=order[,comor]
+          "Order.Entry.Date","Actual.Delivery.Date")
+commodity_order=order[,comor]
 commodity_order= subset(commodity_order, commodity_order$Status != "Cancelled")
 
 #Functions
@@ -68,6 +68,9 @@ if (is.factor(commodity_order$Agreed.Delivery.Date)){
 if (is.factor(commodity_order$Actual.Delivery.Date)){
   commodity_order$Actual.Delivery.Date = fact_to_date(commodity_order$Actual.Delivery.Date)
 }
+if (is.factor(commodity_order$Order.Entry.Date)){
+  commodity_order$Order.Entry.Date = fact_to_date(commodity_order$Order.Entry.Date)
+}
 
 commodity_order$lateDays = commodity_order$Actual.Delivery.Date - commodity_order$Agreed.Delivery.Date
 
@@ -89,9 +92,10 @@ commodity_order$Item.Description = as.factor(gsub("\\s*\\[[^\\)]+\\]","",
 #ICONS
 
 #PALLETTE
+max(table(commodity_order$Destination.Country))
 pal <- colorNumeric(
   palette = "YlOrRd",
-  domain = c(0, max(table(commodity_order$Destination.Country)))) 
+  domain = c(0, 300)) 
 #how to adjust this in a smart way?
 
 #MAPPING
@@ -147,18 +151,23 @@ ui = dashboardPage(title = "Order Lookup",
 
 server <- function(input, output, session) {
   
+  filter_tm = reactive({
+    tm_out = commodity_order
+    if (!is.null(input$time_range)){ #filter by entry date, do I need if clause?
+      tm_out = tm_out[tm_out$Order.Entry.Date > input$time_range[1],]
+      tm_out = tm_out[tm_out$Order.Entry.Date < input$time_range[2],]
+    }
+    if (!is.null(input$product)){ #filter by product, product should be affected by category
+      tm_out = tm_out[tm_out$Item.Description %in% input$product,]
+    }
+    return(tm_out)
+  })
+  
   tab_out <- reactive({
-    temp= commodity_order
-    # if (!is.null(input$time_range)){ #filter by entry date
-    #   temp = temp[temp$Order.Entry.Date < input$time_range[1],]
-    #   temp = temp[temp$Order.Entry.Date > input$time_range[2],]
-    # }
+    temp= filter_tm()
     
     if (!is.null(input$country)){ #filter by country
       temp = temp[temp$Destination.Country %in% input$country,]
-    }
-    if (!is.null(input$product)){ #filter by product, product should be affected by category
-      temp = temp[temp$Item.Description %in% input$product,]
     }
     
     {#Status that is releveant to delivery performance
@@ -184,12 +193,8 @@ server <- function(input, output, session) {
   
   map_out = reactive({ #will output the spatialpolygonsdataframe
     
-    comods = commodity_order #filter by product and late days
+    comods = filter_tm() #filter by product and late days
     
-    if (!is.null(input$product)){ #filter by product, product should be affected by category
-      comods = comods[comods$Item.Description %in% input$product,]
-    }
-
     #Shipment order count
     order_count = as.data.frame(table(comods$Destination.Country))
     colnames(order_count) = c("country", "Shipment Orders")
@@ -198,7 +203,7 @@ server <- function(input, output, session) {
     expense = aggregate((Unit.Cost*Shipped.Quantity)~Destination.Country, data = comods, sum)
     colnames(expense)= c("country","Cost.Product.Shipped")
 
-    #Late
+    #Late , can be done together with table
     commodity_late=as.data.frame.matrix(t(table(comods$lateDays > input$on_time[2], comods$Destination.Country)))
     colnames(commodity_late)[colnames(commodity_late) == "TRUE"] = "Late"
     commodity_late$country = rownames(commodity_late)
@@ -219,11 +224,11 @@ server <- function(input, output, session) {
     orders$Unit.Cost = orders$Unit.Cost*orders$Shipped.Quantity
     colnames(orders) = c("RO#", "Country", "Category", "Product", "Status",
                       "Shipped Quantity", "RO Total Cost", "Agreed Delivery Date",
-                      "Actual Delivery Date", "Late days","Status_filter")
+                      "Order Entry Date", "Actual Delivery Date", "Late days","Status_filter")
     orders$`RO Total Cost` = print.money(orders$`RO Total Cost`)
-    orders[, -c(10,11)]},  #hid Late days and Status_filter in final prodcut
+    orders[, -c(9,11, 12)]},  #hid Late days and Status_filter in final prodcut
     options = list(scrollX = TRUE))#datatable width changes with window size
-  
+  #[, -c(10,11)]
   output$map <- renderLeaflet({
     com = map_out()
     leaflet(com) %>% addTiles() %>%
@@ -246,11 +251,11 @@ server <- function(input, output, session) {
                     fillOpacity = 0.7,
                     bringToFront = TRUE),
                   group = "Orders") %>%
-      # addPolygons(stroke = FALSE, smoothFactor = 0.2,
-      #             fillOpacity = 1, color = ~pal(Late),
-      #             label = ~ADMIN,
-      #             group = "Warehouse")%>%
-
+      # addMarkers(map, lng = NULL, lat = NULL, layerId = NULL, group = NULL,
+      #            icon = NULL, popup = NULL, popupOptions = NULL, label = NULL,
+      #            labelOptions = NULL, options = markerOptions(), clusterOptions = NULL,
+      #            clusterId = NULL, data = getMapData(map))%>%
+      #show orders about to be delivered
       addLegend("bottomright", pal = pal, values = ~Late,
                 title = "Number of Late Shipments",
                 opacity = 1)%>%
@@ -258,7 +263,7 @@ server <- function(input, output, session) {
       # Layers control
       addLayersControl(
         baseGroups = c("Orders"),
-        overlayGroups = c("Warehouse"),
+        overlayGroups = c("Deliveries"), #show upcoming deliveries
         options = layersControlOptions(collapsed = FALSE))%>%
       addControl(html="<input id=\"slide\" type=\"range\" min=\"0\" max=\"1\" step=\"0.1\" value=\"1\">",
                  position = "bottomleft") %>%
