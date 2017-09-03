@@ -110,12 +110,32 @@ pal <- colorNumeric(
 
 ui = dashboardPage(title = "Order Lookup",
                    dashboardHeader(title = "Commodity Procurement Orders", 
-                                   dropdownMenu(type = "tasks", 
-                                                headerText = "",
-                                                taskItem("Import Dataset"
-                                                ),
-                                                taskItem("Export Table"
-                                                ))),
+                                   dropdownMenu(type = "notifications",
+                                                notificationItem(
+                                                  text = "File input feature",
+                                                  icon("warning")),
+                                                notificationItem(
+                                                  text = "Complete Filter submit buttom",
+                                                  icon("warning")),
+                                                notificationItem(
+                                                  text = "RDC location filter",
+                                                  icon("warning")),
+                                                notificationItem(
+                                                  text = "Processing line item map layer",
+                                                  icon("warning")),
+                                                notificationItem(
+                                                  text = "HIghlight selected countries on map",
+                                                  icon("warning")),
+                                                notificationItem(
+                                                  text = "no rows to aggregate for late deliveris in map dataframe",
+                                                  icon("warning")),
+                                                notificationItem(
+                                                  text = "dynamic pallette gradient",
+                                                  icon("warning")),
+                                                notificationItem(
+                                                  text = "agreed nad requested delivery date toggle",
+                                                  icon("warning"))
+                                                )),
                    dashboardSidebar(
                      sidebarMenu(
                        menuItem("Data Dashboard", tabName = "datavis", icon = icon("dashboard")),
@@ -161,7 +181,12 @@ ui = dashboardPage(title = "Order Lookup",
                                    min = as.Date("2015-01-01"), 
                                    max = Sys.Date(), 
                                    value = c(as.Date("2015-01-01"),
-                                             Sys.Date()))
+                                             Sys.Date())),
+                       fileInput("file1", "Choose CSV File",
+                                 accept = c(
+                                   "text/csv",
+                                   "text/comma-separated-values,text/plain",
+                                   ".csv"))
                      )
                    ),
                    dashboardBody(
@@ -169,7 +194,8 @@ ui = dashboardPage(title = "Order Lookup",
                        tabItem(tabName = "datavis",
                                h4("Map and Orders"),
                                fluidRow(box(width = 12, leafletOutput("map")),
-                                        box(width = 12, dataTableOutput("table")))
+                                        box(width = 12, dataTableOutput("table"), 
+                                            downloadButton("downloadData", "Export")))
                        )
                      )
                    )
@@ -229,6 +255,7 @@ server <- function(input, output, session) {
   })
   
   
+  
   map_out = reactive({ #will output the spatialpolygonsdataframe
     
     comods = filter_tm() #filter by product and late days
@@ -271,7 +298,14 @@ server <- function(input, output, session) {
     orders$`Line Item Total Cost` = print.money(orders$`Line Item Total Cost`)
     orders[,-c(6:8, 12:13, 15:16)]},  #hid Late days and Status_filter in final prodcut
     options = list(scrollX = TRUE))#datatable width changes with window size
-  #[, -c(10,11)]
+  
+  
+  output$downloadData <- downloadHandler(
+    filename = "out.csv", #how to set deafult file name
+    content = function(file) {
+      write.csv(tab_out(), file, row.names = FALSE)
+    }
+  )
   
   output$map <- renderLeaflet({
     com = map_out()
@@ -310,8 +344,8 @@ server <- function(input, output, session) {
       addLayersControl(
         baseGroups = c("Line Items Delivered Late"),
         overlayGroups = c("Line Items In Process", 
-                          "Layer for RDC"), #show upcoming deliveries
-        options = layersControlOptions(collapsed = FALSE)) %>% hideGroup("Line Items In Process")
+                          "RDC"), #show upcoming deliveries
+        options = layersControlOptions(collapsed = FALSE)) %>% hideGroup(c("Line Items In Process", "RDC"))
     # %>%
       # addControl(html="<input id=\"slide\" type=\"range\" min=\"0\" max=\"1\" step=\"0.1\" value=\"1\">",
       #            position = "bottomleft") %>%
