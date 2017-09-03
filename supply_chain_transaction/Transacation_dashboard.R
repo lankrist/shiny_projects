@@ -94,7 +94,7 @@ commodity_order$Item.Description = as.factor(gsub("\\s*\\[[^\\)]+\\]","",
 #will need to be editted
 
 #Country coordinates
-coords= as.data.frame(t(sapply(countries$ADMIN, geocodeAdddress)))
+#coords= as.data.frame(t(sapply(countries$ADMIN, geocodeAdddress)))
 
 #MAP ATTRIBUTES
 #ICONS
@@ -113,7 +113,7 @@ ui = dashboardPage(title = "Order Lookup",
                    dashboardSidebar(
                      sidebarMenu(
                        menuItem("Data Dashboard", tabName = "datavis", icon = icon("dashboard")),
-                       menuItem("Select Country", icon = icon("map"),
+                       menuItem("Select Country", icon = icon("globe"),
                                 selectizeInput("country", "Click on Country", 
                                                choices = commodity_order$Destination.Country, 
                                                multiple = TRUE )),
@@ -121,28 +121,36 @@ ui = dashboardPage(title = "Order Lookup",
                        #          selectizeInput("product_cat", "Select Category",
                        #                         choices = commodity_order$Product.Category,
                        #                         multiple = T)),
-                       menuItem("Select Product", icon = icon("search"),
+                       menuItem("Select Product", icon = icon("cubes"),
                                 selectizeInput("product", "Select Product",
                                                choices = commodity_order$Item.Description,
                                                multiple = T)),
-                       menuItem("Shipment Mechanism", icon = icon("cubes"),
-                                selectizeInput("rdc_dd", "Select Product",
+                       menuItem("Shipment Mechanism", icon = icon("tags"),
+                                selectizeInput("rdc_dd", "Select Mechanism",
                                                choices = commodity_order$Order.Fulfilment.Method,
+                                               multiple = T),
+                                selectizeInput("rdc_country", "Select RDC",
+                                               choices = commodity_order$Order.Pickup.Country,
                                                multiple = T)),
                        #should there be filter on RDC location
-                       sliderInput("on_time", "On time Delivery Days:",
+                       menuItem("Delivery Status", icon = icon("clock-o"), 
+                                sliderInput("on_time", "On time Delivery Window:",
                                    min=-150, max=150, 
-                                   value=c(-14, 7)),
-                       checkboxGroupInput("status_filters", "Order Status:",
-                                         choices = c("Late" = "Late",
-                                                     "On time" = "On time",
-                                                     "Early" = "Early",
-                                                     "Processing" = "Processing",
-                                                     "Other" = "Other"),
-                                         selected = c("Late" = "Late",
-                                                      "On time" = "On time",
-                                                      "Early" = "Early",
-                                                      "Processing" = "Processing")),
+                                   value=c(-14, 7)), 
+                                checkboxGroupInput("status_filters", "Order Status:",
+                                                   choices = c("Late" = "Late",
+                                                               "On time" = "On time",
+                                                               "Early" = "Early",
+                                                               "Processing" = "Processing",
+                                                               "Other" = "Other"),
+                                                   selected = c("Late" = "Late",
+                                                                "On time" = "On time",
+                                                                "Early" = "Early",
+                                                                "Processing" = "Processing")),
+                                radioButtons("Agreed/Requested", "Choose Date:",
+                                             c("Agreed Delivery Date", "Requested Delivery Date"),
+                                             selected = "Agreed Delivery Date")
+                                ),
                        sliderInput("time_range","Timeframe:",
                                    min = as.Date("2015-01-01"), 
                                    max = Sys.Date(), 
@@ -197,6 +205,10 @@ server <- function(input, output, session) {
     
     return(tm_out)
   })
+  
+  #show filter by definitons
+  #Countries by commodities in commodity category using on time timeframe 
+  #looking at (delivered/processing) orders through mechanism 
   
   tab_out <- reactive({
     temp= filter_tm()
