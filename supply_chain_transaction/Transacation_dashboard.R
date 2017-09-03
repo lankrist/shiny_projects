@@ -1,7 +1,7 @@
 #Commodity dashboard Line Items
 #Kristine Lan
 #USAID internship project
-#updated: 20170901
+#updated: 20170903
 
 library(shiny)
 library(RJSONIO)
@@ -109,7 +109,13 @@ pal <- colorNumeric(
 #MAPPING
 
 ui = dashboardPage(title = "Order Lookup",
-                   dashboardHeader(title = "Commodity Procurement Orders"),
+                   dashboardHeader(title = "Commodity Procurement Orders", 
+                                   dropdownMenu(type = "tasks", 
+                                                headerText = "",
+                                                taskItem("Import Dataset"
+                                                ),
+                                                taskItem("Export Table"
+                                                ))),
                    dashboardSidebar(
                      sidebarMenu(
                        menuItem("Data Dashboard", tabName = "datavis", icon = icon("dashboard")),
@@ -184,6 +190,9 @@ server <- function(input, output, session) {
     
     if (!is.null(input$rdc_dd)){ #filter by product, product should be affected by category
       tm_out = tm_out[tm_out$Order.Fulfilment.Method %in% input$rdc_dd,]
+      if("RDC" %in% input$rdc_dd & !is.null(input$rdc_country)){
+        tm_out = tm_out[tm_out$Order.Pickup.Country %in% input$rdc_country,]
+      }
     }
     
     {#Status that is releveant to delivery performance
@@ -300,7 +309,8 @@ server <- function(input, output, session) {
       # Layers control
       addLayersControl(
         baseGroups = c("Line Items Delivered Late"),
-        overlayGroups = c("Line Items In Process"), #show upcoming deliveries
+        overlayGroups = c("Line Items In Process", 
+                          "Layer for RDC"), #show upcoming deliveries
         options = layersControlOptions(collapsed = FALSE)) %>% hideGroup("Line Items In Process")
     # %>%
       # addControl(html="<input id=\"slide\" type=\"range\" min=\"0\" max=\"1\" step=\"0.1\" value=\"1\">",
